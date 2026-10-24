@@ -170,7 +170,7 @@ inline const wchar_t* const kStr[][2] = {
     /* S_TOOLS_QQ_SUB */    { L"\u4EA4\u6D41\u4E0E\u53CD\u9988", L"Chat and feedback" },
     /* S_ABOUT_TEXT */      { L"Ua \u5DE5\u5177\u7BB1  \u7248\u672C ", L"Ua Toolbox  Version " },
     /* S_ABOUT_LEGAL */     { L"\u672C\u5DE5\u5177\u4EC5\u4F9B\u5B66\u4E60\u4E0E\u6388\u6743\u5B89\u5168\u7814\u7A76\u4F7F\u7528\u3002\u7528\u6237\u5E94\u5728\u5408\u6CD5\u6388\u6743\u8303\u56F4\u5185\u4F7F\u7528\uFF0C\u4F5C\u8005\u4E0D\u627F\u62C5\u4EFB\u4F55\u6CD5\u5F8B\u8D23\u4EFB\u3002\u672C\u5DE5\u5177\u5B8C\u5168\u514D\u8D39\u4E14\u5F00\u6E90\u3002", L"For educational and authorized security research only. Users are responsible for legal compliance. The author assumes no liability. This tool is free and open source." },
-    /* S_VERSION */         { L"1.0.2", L"1.0.2" },
+    /* S_VERSION */         { L"1.0.3", L"1.0.3" },
     /* S_ERR_NO_PROMPT_SEL */ { L"\u8BF7\u5148\u9009\u62E9\u4E00\u4E2A\u63D0\u793A\u8BCD", L"Please select a prompt first" },
     /* S_ERR_READ_PROMPT */ { L"\u8BFB\u53D6\u63D0\u793A\u8BCD\u6587\u4EF6\u5931\u8D25", L"Failed to read prompt file" },
     /* S_ERR_UTF16_PROMPT */{ L"\u63D0\u793A\u8BCD\u6587\u4EF6\u8BF7\u4FDD\u5B58\u4E3A UTF-8 \u7F16\u7801", L"Please save prompt file as UTF-8" },
