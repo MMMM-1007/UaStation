@@ -64,6 +64,8 @@ int HitTest(float x, float y)
         if (In(AboutGithubRect(), x, y)) return kHoverAboutGithub;
         // 更新链接只有在真的发现新版本时才可点击
         if (UpdateAvailable() && In(AboutUpdateRect(), x, y)) return kHoverAboutUpdate;
+        // "立即更新" 按钮：发现新版本且没在下载时可点击
+        if (UpdateAvailable() && !g_updateDownloading && In(AboutUpdateBtnRect(), x, y)) return kHoverAboutUpdate2;
         return kHoverDlgBg;
     }
     if (g_skillMgr)

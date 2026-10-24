@@ -184,6 +184,9 @@ bool g_updateChecked = false;
 // 同时只允许一个检查线程在跑
 static std::atomic<bool> g_updateRunning{ false };
 
+// 窗口已销毁标志：后台线程用它保护 PostMessage
+std::atomic<bool> g_exiting{ false };
+
 // 下载更新状态
 bool g_updateDownloading = false;
 static std::atomic<bool> g_downloadRunning{ false };
@@ -314,7 +317,7 @@ void CheckUpdates(HWND hWnd)
             }
 
             g_updateRunning = false;
-            if (hWnd) PostMessageW(hWnd, kMsgUpdateReady, 0, 0);
+            if (hWnd && !g_exiting) PostMessageW(hWnd, kMsgUpdateReady, 0, 0);
         }).detach();
 }
 
@@ -434,7 +437,7 @@ void DownloadUpdate(HWND hWnd)
 
             g_updateDownloading = false;
             g_downloadRunning = false;
-            if (hWnd) PostMessageW(hWnd, kMsgUpdateDownloaded, ok ? 1 : 0, 0);
+            if (hWnd && !g_exiting) PostMessageW(hWnd, kMsgUpdateDownloaded, ok ? 1 : 0, 0);
         }).detach();
 }
 
@@ -755,6 +758,6 @@ void SyncPrompts(HWND hWnd)
                 g_syncToastOverride = g_syncToastBuffer.c_str();
             }
             g_syncRunning = false;
-            if (hWnd) PostMessageW(hWnd, kMsgSyncReady, (WPARAM)versionChanges, 0);
+            if (hWnd && !g_exiting) PostMessageW(hWnd, kMsgSyncReady, (WPARAM)versionChanges, 0);
         }).detach();
 }

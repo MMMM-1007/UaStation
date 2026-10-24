@@ -24,6 +24,7 @@ inline constexpr int   kCmdAbout = 1003;
 inline constexpr int   kCmdExit = 1004;
 inline constexpr int   kCmdCheckUpdate = 1005;
 inline constexpr int   kCmdTrayShow = 1006;
+inline constexpr int   kCmdCleanData = 1007;
 inline constexpr int   kCmdTheme = 2000;       // 2000 + ThemeMode
 inline constexpr int   kCmdLang = 3000;        // 3000 + Lang
 
@@ -105,9 +106,12 @@ enum Str {
     S_CAT_CRACK, S_CAT_MOBILE, S_CAT_PENTEST, S_CAT_AI, S_CAT_OTHER,
     S_SYNC_CHECKING, S_SYNC_UPDATED, S_PROMPTS_UPDATED_COUNT,
     S_TRAY_SHOW, S_TRAY_TOOLTIP,
-    S_UPDATE_DOWNLOADING, S_UPDATE_READY, S_UPDATE_FAILED, S_UPDATE_BTN,
+    S_UPDATE_DOWNLOADING, S_UPDATE_READY, S_UPDATE_BTN,
+    S_INJECT_RESTART_HINT, S_UPDATE_MANUAL_HINT, S_WARN_FILE_MODIFIED, S_CLEAN_DATA, S_CLEAN_DATA_CONFIRM, S_CLEAN_DATA_OK,
     S_STATUS_INSTALLED, S_STATUS_SKILLS,
     S_CONFIRM_UNINSTALL,
+    S_UPDATE_CONFIRM,
+    S_SKILL_COUNT_FMT, S_SKILL_TOOL_COUNT_FMT, S_SKILL_NO_MATCH,
     S_COUNT
 };
 
@@ -203,11 +207,20 @@ inline const wchar_t* const kStr[][2] = {
     /* S_TRAY_TOOLTIP */             { L"Ua \u5DE5\u5177\u7BB1",                     L"Ua Toolbox" },
     /* S_UPDATE_DOWNLOADING */       { L"\u6B63\u5728\u4E0B\u8F7D\u66F4\u65B0...",   L"Downloading update..." },
     /* S_UPDATE_READY */             { L"\u4E0B\u8F7D\u5B8C\u6210\uFF0C\u5373\u5C06\u91CD\u542F", L"Download complete, restarting..." },
-    /* S_UPDATE_FAILED */            { L"\u4E0B\u8F7D\u66F4\u65B0\u5931\u8D25",       L"Update download failed" },
     /* S_UPDATE_BTN */               { L"\u7ACB\u5373\u66F4\u65B0",                   L"Update Now" },
+    /* S_INJECT_RESTART_HINT */ { L" \u5B89\u88C5\u6210\u529F\uFF0C\u8BF7\u91CD\u542F AI \u5DE5\u5177\u751F\u6548", L" installed, please restart the AI tool" },
+    /* S_UPDATE_MANUAL_HINT */ { L"\u81EA\u52A8\u66F4\u65B0\u4E0B\u8F7D\u5931\u8D25\u3002\u662F\u5426\u6253\u5F00\u6D4F\u89C8\u5668\u624B\u52A8\u4E0B\u8F7D\u6700\u65B0\u7248\u672C\uFF1F", L"Auto-update download failed. Open browser to download the latest version?" },
+    /* S_WARN_FILE_MODIFIED */ { L"\u8BE5\u6587\u4EF6\u5728\u5B89\u88C5\u540E\u88AB\u4FEE\u6539\u8FC7\uFF0C\u5378\u8F7D\u5C06\u6062\u590D\u5230\u5B89\u88C5\u524D\u7684\u7248\u672C\u3002\u786E\u5B9A\u7EE7\u7EED\uFF1F", L"This file was modified after installation. Uninstalling will restore the pre-install version. Continue?" },
+    /* S_CLEAN_DATA */ { L"\u6E05\u7406\u6240\u6709\u6570\u636E", L"Clean All Data" },
+    /* S_CLEAN_DATA_CONFIRM */ { L"\u5C06\u5220\u9664\u6240\u6709\u5907\u4EFD\u3001\u72B6\u6001\u548C\u8BBE\u7F6E\u3002\u786E\u5B9A\uFF1F", L"This will delete all backups, state and settings. Continue?" },
+    /* S_CLEAN_DATA_OK */ { L"\u6570\u636E\u5DF2\u6E05\u7406", L"All data cleaned" },
     /* S_STATUS_INSTALLED */          { L"\u5DF2\u5B89\u88C5",                       L"installed" },
     /* S_STATUS_SKILLS */             { L"\u6280\u80FD",                             L"skills" },
     /* S_CONFIRM_UNINSTALL */         { L"\u786E\u8BA4\u5378\u8F7D\uFF1F\u8FD9\u5C06\u6062\u590D\u539F\u59CB\u914D\u7F6E\u6587\u4EF6\u3002", L"Confirm uninstall? This will restore the original config file." },
+    /* S_UPDATE_CONFIRM */            { L"\u53D1\u73B0\u65B0\u7248\u672C %s\uFF08\u5F53\u524D %s\uFF09\uFF0C\u7ACB\u5373\u4E0B\u8F7D\u5E76\u66F4\u65B0\uFF1F", L"New version %s available (current %s). Download and update now?" },
+    /* S_SKILL_COUNT_FMT */           { L"\u5171 %d / %d \u4E2A skill", L"%d of %d skills" },
+    /* S_SKILL_TOOL_COUNT_FMT */      { L"%d \u4E2A\u5DE5\u5177", L"%d tools" },
+    /* S_SKILL_NO_MATCH */            { L"\u6CA1\u6709\u5339\u914D\u7684 skill", L"No matching skills" },
 };
 
 inline const wchar_t* T(Str s)
@@ -347,48 +360,12 @@ inline constexpr SkillCategory kSkillCategories[] = {
 static_assert(ARRAYSIZE(kSkillCategories) == kSkillCount, "kSkillCategories must match kSkills");
 
 inline const Item kItems[] = {
-    // 全局提示词位置均按官方文档核对
-    //   Claude Code:      ~/.claude/CLAUDE.md
-    //   Codex (OpenAI):   ~/.codex/AGENTS.md
-    //   Gemini CLI:       ~/.gemini/GEMINI.md
-    //   Grok Build:       ~/.grok/AGENTS.md
-    //   DeepSeek Harness: ~/.dsh/AGENTS.md
-    //   OpenCode:         ~/.config/opencode/AGENTS.md
-    //   Hermes:           ~/.hermes/SOUL.md
-    //   MiniMax Code:     ~/.minimax/AGENTS.md
-    //   VS Code Copilot:  ~/.copilot/copilot-instructions.md
-    //   Devin Desktop:    ~/.codeium/windsurf/memories/global_rules.md
-    //   CodeBuddy Code:   ~/.codebuddy/CODEBUDDY.md   (腾讯云文档)
+    // 全局提示词位置（按官方文档 + gpt6-Astra seats.py 交叉核对）
+    // 检测逻辑在 inject.cpp ToolDetected()：检查目标路径的父目录是否存在
     { L"Claude",           L"", kGroupEditor, IDR_LOGO_CLAUDE,    false, nullptr, L"https://docs.anthropic.com/en/docs/claude-code/overview",
         L"claude",    L".claude\\CLAUDE.md", nullptr, L".claude\\skills" },
-    { L"Codex",            L"", kGroupEditor, IDR_LOGO_CODEX,     true,  nullptr, L"https://openai.com/codex/",
-        L"codex",     L".codex\\AGENTS.md", nullptr, L".codex\\skills" },
-    { L"Gemini CLI",       L"", kGroupEditor, IDR_LOGO_GEMINI,    false, nullptr, L"https://ai.google.dev/gemini-api/docs/gemini-cli",
-        L"gemini",    L".gemini\\GEMINI.md" },
-    { L"Grok Build",       L"", kGroupEditor, IDR_LOGO_GROK,      false, nullptr, L"",
-        L"grokbuild", L".grok\\AGENTS.md" },
-    { L"ZCode",            L"", kGroupEditor, IDR_LOGO_ZAI,       false, nullptr, L"",
-        L"zcode",     L".zcode\\AGENTS.md", nullptr, L".zcode\\skills" },
     { L"DeepSeek Harness", L"", kGroupEditor, IDR_LOGO_DEEPSEEK,  false, nullptr, L"",
         L"deepseek",  L".dsh\\AGENTS.md", nullptr, L".dsh\\skills" },
-    { L"OpenCode",         L"", kGroupEditor, IDR_LOGO_OPENCODE,  false, nullptr, L"https://opencode.ai",
-        L"opencode",  L".config\\opencode\\AGENTS.md" },
-    { L"Hermes",           L"", kGroupEditor, IDR_LOGO_HERMES,    false, nullptr, L"",
-        L"hermes",    L".hermes\\SOUL.md" },
-    { L"MiniMax Code",     L"", kGroupEditor, IDR_LOGO_MINIMAX,   false, nullptr, L"",
-        L"mcode",     L".minimax\\AGENTS.md" },
-    { L"Cursor",           L"", kGroupEditor, IDR_LOGO_CURSOR,    false, nullptr, L"https://cursor.com",
-        L"cursor",    L".cursor\\rules\\Ua.mdc" },
-    { L"VS Code",          L"", kGroupEditor, IDR_LOGO_VSCODE,    false, nullptr, L"https://code.visualstudio.com",
-        L"vscode",    L".copilot\\copilot-instructions.md" },
-    { L"Devin Desktop",    L"", kGroupEditor, IDR_LOGO_DEVIN,     false, nullptr, L"https://devin.ai/desktop",
-        L"devin",     L".codeium\\windsurf\\memories\\global_rules.md" },
-    { L"WorkBuddy",        L"", kGroupEditor, IDR_LOGO_WORKBUDDY, true,  nullptr, L"",
-        L"workbuddy", nullptr, L"\u8FD8\u6CA1\u6709\u786E\u8BA4 WorkBuddy \u7684\u63D0\u793A\u8BCD\u4F4D\u7F6E" },
-    { L"WorkBuddy",        L"", kGroupEditor, IDR_LOGO_CODEBUDDY, true,  nullptr, L"",
-        L"codebuddy", L".codebuddy\\CODEBUDDY.md", nullptr, L".codebuddy\\skills" },
-    { L"\u8C46\u5305",             L"", kGroupEditor, IDR_LOGO_DOUBAO,    false, nullptr, L"https://www.doubao.com",
-        L"doubao",    nullptr, L"\u8C46\u5305\u6CA1\u6709\u672C\u5730\u63D0\u793A\u8BCD\u6587\u4EF6" },
     { L"Skills \u7BA1\u7406",      L"\u7BA1\u7406\u5DF2\u5B89\u88C5\u7684 Skills", kGroupTools, 0, false, L"\uE8FD", L"" },     // BulletedList
     { L"\u6EE1\u8840\u4E2D\u8F6C\u7AD9",       L"API \u4E2D\u8F6C\u670D\u52A1",    kGroupTools,     0, false, L"\uE774", L"https://utlra.cc/" },     // Globe
     { L"\u4F7F\u7528\u6559\u7A0B",         L"\u4ECE\u5B89\u88C5\u5230\u4E0A\u624B",    kGroupTools,     0, false, L"\uE82D", L"https://github.com/freyrswift/UaStation#usage" },     // Dictionary
@@ -449,6 +426,7 @@ inline const MenuEntry kMenu[] = {
     { L"\uE768", S_AUTOSTART,    kCmdAutostart },
     { nullptr,   S_COUNT,        0 },
     { L"\uE117", S_CHECK_UPDATE, kCmdCheckUpdate },
+    { L"\uE74D", S_CLEAN_DATA,   kCmdCleanData },
     { L"\uE946", S_ABOUT,        kCmdAbout },
     { L"\uE7E8", S_EXIT,         kCmdExit },
 };

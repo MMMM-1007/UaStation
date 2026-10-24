@@ -5,6 +5,7 @@
 
 #include "config.h"
 
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -84,6 +85,9 @@ void ApplyUpdate(HWND hWnd);
 
 // 下载中标记（UI 可查询来禁止重复点击）
 extern bool g_updateDownloading;
+
+// 窗口已销毁标志：后台线程用它保护 PostMessage
+extern std::atomic<bool> g_exiting;
 
 // ---------------------------------------------------------------------------
 // 后台同步 prompts\ 文件夹

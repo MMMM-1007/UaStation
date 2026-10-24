@@ -84,3 +84,7 @@ std::vector<SkillStatus> GetSkillStatuses();
 // ---------------------------------------------------------------------------
 bool Install(int i, std::wstring& err);
 bool Uninstall(int i, std::wstring& err);
+
+// Marker 常量（inject.cpp 定义）：区间注入的起止标记
+extern const char kMarkerBegin[];
+extern const char kMarkerEnd[];

@@ -138,11 +138,10 @@ static void SetDialog(HWND hWnd, int i)
     {
         g_state[i] = ScanState(i);
         g_prompts = ListPrompts();
-        // 自动选中：当前语言的 standard-pro，否则 default.md，否则第一个
-        const wchar_t* preferred = g_lang == kLangEN ? L"Ua-standard-pro-en.md" : L"Ua-standard-pro.md";
+        // 自动选中：Ua.md（唯一的综合提示词）；否则 default.md；否则第一个
         for (int j = 0; j < (int)g_prompts.size(); ++j)
         {
-            if (_wcsicmp(g_prompts[j].c_str(), preferred) == 0) { g_promptSel = j; break; }
+            if (_wcsicmp(g_prompts[j].c_str(), L"Ua.md") == 0) { g_promptSel = j; break; }
             if (_wcsicmp(g_prompts[j].c_str(), L"default.md") == 0 && g_promptSel < 0) g_promptSel = j;
         }
         if (g_promptSel < 0 && !g_prompts.empty()) g_promptSel = 0;
@@ -175,15 +174,43 @@ static void DialogCommand(HWND hWnd, int b)
         {
             if (b == kDlgUninstall)
             {
+                // 普通卸载确认
                 int result = MessageBoxW(hWnd, T(S_CONFIRM_UNINSTALL), L"Ua", MB_YESNO | MB_ICONQUESTION);
                 if (result != IDYES) return;
+
+                // 检查文件里是否还有 Ua 的注入标记
+                TargetState ts;
+                if (LoadState(i, ts))
+                {
+                    std::wstring path = TargetPath(i);
+                    std::string cur;
+                    if (!path.empty() && ReadBytes(path, cur) == kReadOk)
+                    {
+                        // marker 注入：检查 UA-INJECT 标记是否还在
+                        bool hasUaMarker = cur.find(kMarkerBegin) != std::string::npos
+                                        && cur.find(kMarkerEnd) != std::string::npos;
+                        // 兼容旧版全文覆盖：中/英文激活词
+                        if (!hasUaMarker)
+                        {
+                            const char markerCN[] = "Ua \xE5\xB7\xB2\xE7\xBB\x8F\xE5\x87\x86\xE5\xA4\x87\xE5\xA5\xBD";
+                            const char markerEN[] = "Ua is ready";
+                            hasUaMarker = cur.find(markerCN) != std::string::npos
+                                       || cur.find(markerEN) != std::string::npos;
+                        }
+                        if (!hasUaMarker)
+                        {
+                            int r2 = MessageBoxW(hWnd, T(S_WARN_FILE_MODIFIED), L"Ua", MB_YESNO | MB_ICONWARNING);
+                            if (r2 != IDYES) return;
+                        }
+                    }
+                }
             }
             bool ok = b == kDlgInstall ? Install(i, err) : Uninstall(i, err);
             g_state[i] = ScanState(i);
             if (ok)
             {
                 SetDialog(hWnd, -1);
-                ShowToast(hWnd, std::wstring(kItems[i].name) + (b == kDlgInstall ? T(S_INJECT_OK) : T(S_UNINSTALL_OK)));
+                ShowToast(hWnd, std::wstring(kItems[i].name) + (b == kDlgInstall ? T(S_INJECT_RESTART_HINT) : T(S_UNINSTALL_OK)));
             }
             else
             {
@@ -273,6 +300,31 @@ static void RunCommand(HWND hWnd, int cmd)
         CheckUpdates(hWnd);
         ShowToast(hWnd, T(S_UPDATE_CHECK));
     }
+    else if (cmd == kCmdCleanData)
+    {
+        int r = MessageBoxW(hWnd, T(S_CLEAN_DATA_CONFIRM), L"Ua", MB_YESNO | MB_ICONWARNING);
+        if (r == IDYES)
+        {
+            // 删除 %APPDATA%\Ua 下的所有内容（备份、state、同步缓存等）
+            std::wstring dir = AppDataDir();
+            if (!dir.empty())
+            {
+                // 用 SHFileOperation 递归删除
+                std::wstring from = dir + L'\0';     // 双 null 终止
+                SHFILEOPSTRUCTW op{};
+                op.wFunc = FO_DELETE;
+                op.pFrom = from.c_str();
+                op.fFlags = FOF_NO_UI | FOF_NOCONFIRMATION | FOF_SILENT;
+                SHFileOperationW(&op);
+            }
+            // 也清掉注册表 HKCU\Software\Ua
+            RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\Ua");
+            // 重新加载状态
+            RefreshStates();
+            InvalidateRect(hWnd, nullptr, FALSE);
+            ShowToast(hWnd, T(S_CLEAN_DATA_OK));
+        }
+    }
     else if (cmd == kCmdExit)
     {
         g_realExit = true;
@@ -355,6 +407,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 else if (hit == kHoverAboutUpdate)
                 {
                     OpenUrl(hWnd, kUpdateReleaseUrl);
+                }
+                else if (hit == kHoverAboutUpdate2 && !g_updateDownloading)
+                {
+                    ShowToast(hWnd, T(S_UPDATE_DOWNLOADING));
+                    DownloadUpdate(hWnd);
                 }
                 return 0;
             }
@@ -485,13 +542,18 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
         return 0;
     case kMsgUpdateReady:
-        // 后台更新检查完成
+        // 后台更新检查完成：有新版本时弹窗询问，用户同意再下载（避免悄悄替换 exe）
         InvalidateRect(hWnd, nullptr, FALSE);
-        // 全自动更新：有新版本直接下载
         if (UpdateAvailable())
         {
-            ShowToast(hWnd, T(S_UPDATE_DOWNLOADING));
-            DownloadUpdate(hWnd);
+            std::wstring newVer = GetUpdateVersion();
+            wchar_t msg[256];
+            swprintf_s(msg, 256, T(S_UPDATE_CONFIRM), newVer.c_str(), T(S_VERSION));
+            if (MessageBoxW(hWnd, msg, L"Ua", MB_YESNO | MB_ICONINFORMATION) == IDYES)
+            {
+                ShowToast(hWnd, T(S_UPDATE_DOWNLOADING));
+                DownloadUpdate(hWnd);
+            }
         }
         return 0;
     case kMsgUpdateDownloaded:
@@ -503,7 +565,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
         else
         {
-            ShowToast(hWnd, T(S_UPDATE_FAILED));
+            // 下载失败：弹窗询问是否打开 GitHub Releases 手动下载
+            int r = MessageBoxW(hWnd, T(S_UPDATE_MANUAL_HINT), L"Ua",
+                MB_YESNO | MB_ICONINFORMATION);
+            if (r == IDYES)
+                OpenUrl(hWnd, kUpdateReleaseUrl);
         }
         InvalidateRect(hWnd, nullptr, FALSE);
         return 0;
@@ -569,6 +635,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
         return 0;
     case WM_DESTROY:
+        g_exiting = true;
         RemoveTray();
         PostQuitMessage(0);
         return 0;
@@ -607,17 +674,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // \u63D0\u524D\u52A0\u8F7D\u8BED\u8A00\u8BBE\u7F6E\uFF0C\u8BA9\u4E0B\u9762\u7684 MessageBox \u7528\u6B63\u786E\u8BED\u8A00\u663E\u793A
     LoadLangSetting();
 
-    // \u9996\u6B21\u542F\u52A8\u65F6\u4ECE exe \u8D44\u6E90\u91CA\u653E\u5185\u5D4C\u7684\u63D0\u793A\u8BCD\u5230 prompts\ \u6587\u4EF6\u5939
+    // \u9996\u6B21\u542F\u52A8\u65F6\u4ECE exe \u8D44\u6E90\u91CA\u653E\u5185\u5D4C\u7684\u63D0\u793A\u8BCD\u5230 %APPDATA%/Ua/prompts/
     ExtractEmbeddedPrompts();
 
-    // \u68C0\u67E5 exe \u65C1\u8FB9\u7684 prompts\ \u6587\u4EF6\u5939\uFF1A\u7F3A\u5931\u76F4\u63A5\u9000\u51FA\uFF0C\u7A7A\u5219\u63D0\u793A\u4F46\u7EE7\u7EED
-    DWORD promptsAttr = GetFileAttributesW(PromptDir().c_str());
-    bool promptsMissing = (promptsAttr == INVALID_FILE_ATTRIBUTES) || !(promptsAttr & FILE_ATTRIBUTE_DIRECTORY);
-    if (promptsMissing)
-    {
-        MessageBoxW(nullptr, T(S_ERR_PROMPTS_MISSING), L"Ua", MB_ICONERROR);
-        return 1;
-    }
+    // \u91CA\u653E\u540E\u5982\u679C\u4ECD\u4E3A\u7A7A\uFF0C\u63D0\u793A\u4F46\u7EE7\u7EED\u8FD0\u884C\uFF08Skills \u7BA1\u7406\u7B49\u529F\u80FD\u4ECD\u53EF\u7528\uFF09
     bool promptsEmpty = ListPrompts().empty();
 
     if (!CreateFactories())
